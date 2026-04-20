@@ -1,0 +1,207 @@
+package com.example.lfrivalsggiteration1.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.lfrivalsggiteration1.data.Post
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
+    val posts by vm.activePosts.observeAsState(emptyList())
+    val acceptedIds by vm.acceptedPostIds.collectAsState()
+    val currentUser by vm.currentUser.observeAsState()
+
+    var showCreator by remember { mutableStateOf(false) }
+
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            TopAppBar(title = { Text("LFG Board") })
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showCreator = true },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Create Post")
+            }
+        }
+    ) { padding ->
+        if (posts.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "No active posts. Tap + to create one!",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(posts, key = { it.postID }) { post ->
+                    PostCard(
+                        post = post,
+                        isAccepted = post.postID in acceptedIds,
+                        discordHandle = if (post.postID in acceptedIds) currentUser?.discordHandle else null,
+                        onAccept = { vm.acceptPost(post.postID) }
+                    )
+                }
+            }
+        }
+    }
+
+    if (showCreator) {
+        PostCreatorSheet(
+            onDismiss = { showCreator = false },
+            onSubmit = { hero, role, rank, msg ->
+                vm.createPost(hero, role, rank, msg)
+                showCreator = false
+            }
+        )
+    }
+}
+
+@Composable
+fun PostCard(
+    post: Post,
+    isAccepted: Boolean,
+    discordHandle: String?,
+    onAccept: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                post.hero,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "${post.role}  •  ${post.rank}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (post.content.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(post.content, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (isAccepted && discordHandle != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Discord: $discordHandle",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            AppButton(
+                onClick = onAccept,
+                enabled = !isAccepted,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (isAccepted) "Accepted ✓" else "Accept")
+            }
+        }
+    }
+}
+
+// Data lists remain the same...
+val HEROES = listOf("Black Panther", "Black Widow", "Captain America", "Doctor Strange", "Groot", "Hawkeye", "Hela", "Hulk", "Iron Fist", "Iron Man", "Luna Snow", "Magneto", "Mantis", "Moon Knight", "Namor", "Psylocke", "Punisher", "Scarlet Witch", "Spider-Man", "Star-Lord", "Storm", "Thor", "Venom", "Wolverine")
+val ROLES = listOf("Duelist", "Vanguard", "Strategist")
+val RANKS = listOf("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Grandmaster", "Celestial", "Eternity", "One Above All")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PostCreatorSheet(
+    onDismiss: () -> Unit,
+    onSubmit: (hero: String, role: String, rank: String, message: String) -> Unit
+) {
+    var hero by remember { mutableStateOf("") }
+    var role by remember { mutableStateOf("") }
+    var rank by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Create LFG Post", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+
+            LFGDropdown("Hero", hero, HEROES) { hero = it; error = false }
+            LFGDropdown("Role", role, ROLES) { role = it; error = false }
+            LFGDropdown("Rank", rank, RANKS) { rank = it; error = false }
+
+            OutlinedTextField(
+                value = message,
+                onValueChange = { if (it.length <= 120) message = it },
+                label = { Text("Message (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                supportingText = { Text("${message.length}/120") }
+            )
+
+            if (error) Text("Please select Hero, Role, and Rank", color = MaterialTheme.colorScheme.error)
+
+            AppButton(
+                onClick = {
+                    if (hero.isBlank() || role.isBlank() || rank.isBlank()) {
+                        error = true; return@AppButton
+                    }
+                    onSubmit(hero, role, rank, message)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Post") }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LFGDropdown(label: String, selected: String, options: List<String>, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = selected,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = { onSelect(option); expanded = false },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                )
+            }
+        }
+    }
+}

@@ -3,13 +3,17 @@ package com.example.lfrivalsggiteration1.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.lfrivalsggiteration1.data.Post
@@ -26,12 +30,18 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(title = { Text("LFG Board") })
+            TopAppBar(
+                title = { Text("LFG Board", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showCreator = true },
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Create Post")
             }
@@ -39,7 +49,9 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     ) { padding ->
         if (posts.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -49,13 +61,25 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(posts, key = { it.postID }) { post ->
+                    // In a real app, you'd fetch the creator's gamertag via a SQL Join.
+                    // For now, we use the current user's tag if they are the creator,
+                    // otherwise a placeholder.
+                    val displayName = if (post.userID == currentUser?.userID) {
+                        currentUser?.gamertag ?: "You"
+                    } else {
+                        "Rival#${post.userID}"
+                    }
+
                     PostCard(
                         post = post,
+                        creatorName = displayName,
                         isAccepted = post.postID in acceptedIds,
                         discordHandle = if (post.postID in acceptedIds) currentUser?.discordHandle else null,
                         onAccept = { vm.acceptPost(post.postID) }
@@ -79,54 +103,99 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 @Composable
 fun PostCard(
     post: Post,
+    creatorName: String,
     isAccepted: Boolean,
     discordHandle: String?,
     onAccept: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                post.hero,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "${post.role}  •  ${post.rank}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (post.content.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(post.content, style = MaterialTheme.typography.bodyMedium)
-            }
-            if (isAccepted && discordHandle != null) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Discord: $discordHandle",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.secondary
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            // Profile Icon Circle
+            Surface(
+                modifier = Modifier.size(50.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondary
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    modifier = Modifier.padding(6.dp),
+                    tint = Color.White
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            AppButton(
+
+            Spacer(Modifier.width(16.dp))
+
+            // Info Column
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = creatorName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(text = "Hero: ${post.hero}", style = MaterialTheme.typography.bodySmall)
+                Text(text = "Rank: ${post.rank}", style = MaterialTheme.typography.bodySmall)
+                Text(text = "Role: ${post.role}", style = MaterialTheme.typography.bodySmall)
+
+                if (post.content.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = post.content,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (isAccepted && discordHandle != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondary,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = "Discord: $discordHandle",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+
+            // Action Button (Accept)
+            IconButton(
                 onClick = onAccept,
                 enabled = !isAccepted,
-                modifier = Modifier.fillMaxWidth()
+                colors = IconButtonDefaults.iconButtonColors(
+                    contentColor = if (isAccepted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                )
             ) {
-                Text(if (isAccepted) "Accepted ✓" else "Accept")
+                if (isAccepted) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Accepted")
+                } else {
+                    Icon(Icons.Default.Add, contentDescription = "Accept")
+                }
             }
         }
     }
 }
 
-// Data lists remain the same...
+// --- Logic Constants ---
 val HEROES = listOf("Black Panther", "Black Widow", "Captain America", "Doctor Strange", "Groot", "Hawkeye", "Hela", "Hulk", "Iron Fist", "Iron Man", "Luna Snow", "Magneto", "Mantis", "Moon Knight", "Namor", "Psylocke", "Punisher", "Scarlet Witch", "Spider-Man", "Star-Lord", "Storm", "Thor", "Venom", "Wolverine")
 val ROLES = listOf("Duelist", "Vanguard", "Strategist")
-val RANKS = listOf("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Grandmaster", "Celestial", "Eternity", "One Above All")
+val RANKS = listOf("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Grandmaster", "Celestial")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -192,7 +261,9 @@ fun LFGDropdown(label: String, selected: String, options: List<String>, onSelect
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->

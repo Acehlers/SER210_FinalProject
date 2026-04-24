@@ -1,59 +1,55 @@
 package com.example.lfrivalsggiteration1.ui
 
 import android.app.Application
+import android.util.Log
+import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.viewModelScope
-import com.example.lfrivalsggiteration1.data.AppDatabase
-import com.example.lfrivalsggiteration1.data.Post
-import com.example.lfrivalsggiteration1.data.User
+import com.example.lfrivalsggiteration1.data.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+    // ... (Keep your existing User/Post variables) ...
 
-    private val db = AppDatabase.Companion.getDatabase(application)
+    private val _heroStats = MutableStateFlow<List<HeroStatResponse>>(emptyList())
+    val heroStats: StateFlow<List<HeroStatResponse>> = _heroStats
 
-    // ── Profile ───────────────────────────────────────────────────────────────
-    val currentUser: LiveData<User?> = db.userDao().getUser()
+    var selectedPlatform by mutableStateOf("PC")
+    var selectedMode by mutableStateOf("Competitive")
+    var isLoading by mutableStateOf(false)
 
-    fun saveProfile(gamertag: String, discord: String) = viewModelScope.launch {
-        val existing = db.userDao().getUserOnce()
-        if (existing == null)
-            db.userDao().insertUser(
-                User(
-                    gamertag = gamertag.trim(),
-                    discordHandle = discord.trim()
-                )
-            )
-        else
-            db.userDao().updateUser(existing.copy(gamertag = gamertag.trim(), discordHandle = discord.trim()))
+    init { fetchStats() }
+
+    fun fetchStats() = viewModelScope.launch {
+        if (isLoading) return@launch
+        isLoading = true
+
+        // The API requires fetching individual heroes
+        val heroesToFetch = listOf("hulk", "iron man", "spider-man", "magneto", "punisher", "storm")
+        val fetchedList = mutableListOf<HeroStatResponse>()
+
+        try {
+            val apiKey = "d5c57e773061d9793e5f031f2e4aacbd871cd7025aad6c3e96ce2ec6cebc361f"
+
+            heroesToFetch.forEach { name ->
+                val result = withContext(Dispatchers.IO) {
+                    RetrofitClient.api.getSingleHeroStats(apiKey, name)
+                }
+                fetchedList.add(result)
+            }
+
+            _heroStats.value = fetchedList
+            Log.d("STATS_DEBUG", "SUCCESS: Loaded ${fetchedList.size} heroes.")
+
+        } catch (e: Exception) {
+            Log.e("STATS_DEBUG", "API Error: ${e.localizedMessage}")
+        } finally {
+            isLoading = false
+        }
     }
-
-    // ── Board ─────────────────────────────────────────────────────────────────
-    val activePosts: LiveData<List<Post>> = db.postDao().getActivePosts()
-
-    fun createPost(hero: String, role: String, rank: String, message: String) = viewModelScope.launch {
-        val userId = db.userDao().getUserOnce()?.userID ?: 1
-        db.postDao().insertPost(
-            Post(
-                userID = userId,
-                hero = hero, role = role, rank = rank,
-                content = message,
-                // Actual
-                expiresAt = System.currentTimeMillis() + 30 * 60 * 1000L
-                // Demo
-                //expiresAt = System.currentTimeMillis() + 10 * 1000L
-            )
-        )
-    }
-
-    // ── Accept (reveals Discord handle) ──────────────────────────────────────
-    private val _acceptedPostIds = MutableStateFlow<Set<Int>>(emptySet())
-    val acceptedPostIds: StateFlow<Set<Int>> = _acceptedPostIds
-
-    fun acceptPost(postId: Int) {
-        _acceptedPostIds.value = _acceptedPostIds.value + postId
-    }
+    // ... (Keep your existing createPost/saveProfile functions) ...
 }

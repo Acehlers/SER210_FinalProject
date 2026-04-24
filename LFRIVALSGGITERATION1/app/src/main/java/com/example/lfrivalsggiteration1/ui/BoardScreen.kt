@@ -21,9 +21,10 @@ import com.example.lfrivalsggiteration1.data.Post
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
-    val posts by vm.activePosts.observeAsState(emptyList())
+    // Explicitly help the compiler with types and use explicit imports if needed
+    val posts by vm.activePosts.observeAsState(initial = emptyList<Post>())
     val acceptedIds by vm.acceptedPostIds.collectAsState()
-    val currentUser by vm.currentUser.observeAsState()
+    val currentUser by vm.currentUser.observeAsState(initial = null)
 
     var showCreator by remember { mutableStateOf(false) }
 
@@ -68,9 +69,6 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(posts, key = { it.postID }) { post ->
-                    // In a real app, you'd fetch the creator's gamertag via a SQL Join.
-                    // For now, we use the current user's tag if they are the creator,
-                    // otherwise a placeholder.
                     val displayName = if (post.userID == currentUser?.userID) {
                         currentUser?.gamertag ?: "You"
                     } else {
@@ -119,7 +117,6 @@ fun PostCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            // Profile Icon Circle
             Surface(
                 modifier = Modifier.size(50.dp),
                 shape = CircleShape,
@@ -135,7 +132,6 @@ fun PostCard(
 
             Spacer(Modifier.width(16.dp))
 
-            // Info Column
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = creatorName,
@@ -174,7 +170,6 @@ fun PostCard(
                 }
             }
 
-            // Action Button (Accept)
             IconButton(
                 onClick = onAccept,
                 enabled = !isAccepted,
@@ -192,7 +187,6 @@ fun PostCard(
     }
 }
 
-// --- Logic Constants ---
 val HEROES = listOf("Black Panther", "Black Widow", "Captain America", "Doctor Strange", "Groot", "Hawkeye", "Hela", "Hulk", "Iron Fist", "Iron Man", "Luna Snow", "Magneto", "Mantis", "Moon Knight", "Namor", "Psylocke", "Punisher", "Scarlet Witch", "Spider-Man", "Star-Lord", "Storm", "Thor", "Venom", "Wolverine")
 val ROLES = listOf("Duelist", "Vanguard", "Strategist")
 val RANKS = listOf("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Grandmaster", "Celestial", "Eternity", "One Above All")

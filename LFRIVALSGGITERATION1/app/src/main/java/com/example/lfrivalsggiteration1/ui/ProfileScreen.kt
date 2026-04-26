@@ -11,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,8 +24,7 @@ import com.example.lfrivalsggiteration1.ui.theme.RivalsRed
 @Composable
 fun ProfileScreen(vm: MainViewModel, onLogout: () -> Unit, modifier: Modifier = Modifier) {
     // observeAsState requires the 'androidx.compose.runtime.getValue' import
-    val currentUser by vm.currentUser.observeAsState()
-
+    val currentUser by vm.currentUser.collectAsState()
     var gamertag by remember { mutableStateOf("") }
     var discord  by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
@@ -46,7 +44,7 @@ fun ProfileScreen(vm: MainViewModel, onLogout: () -> Unit, modifier: Modifier = 
     }
 
     Column(
-        modifier = modifier.fillMaxSize().background(Color.White).padding(16.dp),
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

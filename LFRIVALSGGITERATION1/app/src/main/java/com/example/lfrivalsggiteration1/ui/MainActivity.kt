@@ -53,9 +53,9 @@ fun MainScaffold(vm: MainViewModel, onLogout: () -> Unit) {
     var selectedTab by remember { mutableStateOf<Screen>(Screen.Board) }
 
     Scaffold(
-        containerColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.primary,
         bottomBar = {
-            NavigationBar(containerColor = Color.White) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
                 tabs.forEach { screen ->
                     NavigationBarItem(
                         selected = selectedTab == screen,

@@ -34,7 +34,7 @@ fun LoginView(vm: MainViewModel, onLoginSuccess: () -> Unit, onNavigateToSignUp:
     var rememberMe by remember { mutableStateOf(vm.isRememberMeEnabled()) }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(Color.White).padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -47,7 +47,7 @@ fun LoginView(vm: MainViewModel, onLoginSuccess: () -> Unit, onNavigateToSignUp:
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it }, colors = CheckboxDefaults.colors(checkedColor = RivalsRed))
-            Text("Remember Password", color = Color.DarkGray, fontSize = 14.sp)
+            Text("Remember Password", color = MaterialTheme.colorScheme.tertiary, fontSize = 14.sp)
         }
 
         Button(
@@ -59,7 +59,7 @@ fun LoginView(vm: MainViewModel, onLoginSuccess: () -> Unit, onNavigateToSignUp:
             Text("LOGIN", fontWeight = FontWeight.Bold, color = Color.White)
         }
 
-        Text(text = "Need an account? Create one", color = Color.Blue, modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToSignUp() })
+        Text(text = "Need an account? Create one", color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToSignUp() })
     }
 }
 
@@ -89,7 +89,7 @@ fun SignUpView(onSignUpSuccess: () -> Unit, onNavigateToLogin: () -> Unit) {
             Text("SIGN UP", fontWeight = FontWeight.Bold, color = Color.White)
         }
 
-        Text(text = "Already have an account? Log In", color = Color.Blue, modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToLogin() })
+        Text(text = "Already have an account? Log In", color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToLogin() })
     }
 }
 

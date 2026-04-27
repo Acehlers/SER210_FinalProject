@@ -23,7 +23,7 @@ fun AuthManager(vm: MainViewModel, onAuthComplete: () -> Unit) {
     if (isLoginScreen) {
         LoginView(vm = vm, onLoginSuccess = onAuthComplete, onNavigateToSignUp = { isLoginScreen = false })
     } else {
-        SignUpView(onSignUpSuccess = { isLoginScreen = true }, onNavigateToLogin = { isLoginScreen = true })
+        SignUpView(vm = vm, onSignUpSuccess = { isLoginScreen = true }, onNavigateToLogin = { isLoginScreen = true })
     }
 }
 
@@ -32,64 +32,126 @@ fun LoginView(vm: MainViewModel, onLoginSuccess: () -> Unit, onNavigateToSignUp:
     var username by remember { mutableStateOf(vm.getSavedUsername()) }
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(vm.isRememberMeEnabled()) }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text("LFRIVALS.GG", color = RivalsRed, fontSize = 42.sp, fontWeight = FontWeight.ExtraBold)
         Text("SIGN IN TO PLAY", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 40.dp))
 
-        AuthInput(value = username, onValueChange = { username = it }, label = "Username")
+        AuthInput(value = username, onValueChange = { username = it; errorMessage = "" }, label = "Username")
         Spacer(modifier = Modifier.height(16.dp))
-        AuthInput(value = password, onValueChange = { password = it }, label = "Password", isPassword = true)
+        AuthInput(value = password, onValueChange = { password = it; errorMessage = "" }, label = "Password", isPassword = true)
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it }, colors = CheckboxDefaults.colors(checkedColor = RivalsRed))
-            Text("Remember Password", color = MaterialTheme.colorScheme.tertiary, fontSize = 14.sp)
+            Text("Remember Me", color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp)
+        }
+
+        if (errorMessage.isNotEmpty()) {
+            Text(errorMessage, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
         }
 
         Button(
-            onClick = { vm.setRememberMe(username, rememberMe); onLoginSuccess() },
+            onClick = {
+                if (username.isBlank() || password.isBlank()) {
+                    errorMessage = "Please enter username and password"
+                    return@Button
+                }
+                isLoading = true
+                vm.login(username, password) { success ->
+                    isLoading = false
+                    if (success) {
+                        vm.setRememberMe(username, rememberMe)
+                        onLoginSuccess()
+                    } else {
+                        errorMessage = "Incorrect username or password"
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(56.dp),
             shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)
+            colors = ButtonDefaults.buttonColors(containerColor = RivalsRed),
+            enabled = !isLoading
         ) {
-            Text("LOGIN", fontWeight = FontWeight.Bold, color = Color.White)
+            if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+            else Text("LOGIN", fontWeight = FontWeight.Bold, color = Color.White)
         }
 
-        Text(text = "Need an account? Create one", color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToSignUp() })
+        Text(
+            text = "Need an account? Create one",
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToSignUp() }
+        )
     }
 }
 
 @Composable
-fun SignUpView(onSignUpSuccess: () -> Unit, onNavigateToLogin: () -> Unit) {
+fun SignUpView(vm: MainViewModel, onSignUpSuccess: () -> Unit, onNavigateToLogin: () -> Unit) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(Color.White).padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text("JOIN RIVALS", color = RivalsRed, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
         Text("CREATE YOUR ACCOUNT", color = Color.Gray, modifier = Modifier.padding(bottom = 40.dp))
 
-        AuthInput(value = username, onValueChange = { username = it }, label = "Username")
+        AuthInput(value = username, onValueChange = { username = it; errorMessage = "" }, label = "Username")
         Spacer(modifier = Modifier.height(16.dp))
-        AuthInput(value = password, onValueChange = { password = it }, label = "Password", isPassword = true)
+        AuthInput(value = password, onValueChange = { password = it; errorMessage = "" }, label = "Password", isPassword = true)
+        Spacer(modifier = Modifier.height(16.dp))
+        AuthInput(value = confirmPassword, onValueChange = { confirmPassword = it; errorMessage = "" }, label = "Confirm Password", isPassword = true)
 
-        Button(
-            onClick = onSignUpSuccess,
-            modifier = Modifier.fillMaxWidth().padding(top = 32.dp).height(56.dp),
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)
-        ) {
-            Text("SIGN UP", fontWeight = FontWeight.Bold, color = Color.White)
+        if (errorMessage.isNotEmpty()) {
+            Text(errorMessage, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
         }
 
-        Text(text = "Already have an account? Log In", color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToLogin() })
+        Button(
+            onClick = {
+                when {
+                    username.isBlank() || password.isBlank() -> errorMessage = "All fields are required"
+                    password != confirmPassword -> errorMessage = "Passwords do not match"
+                    password.length < 6 -> errorMessage = "Password must be at least 6 characters"
+                    else -> {
+                        isLoading = true
+                        vm.signUp(username, password) { success ->
+                            isLoading = false
+                            if (success) onSignUpSuccess()
+                            else errorMessage = "Username already taken"
+                        }
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 32.dp).height(56.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = RivalsRed),
+            enabled = !isLoading
+        ) {
+            if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+            else Text("SIGN UP", fontWeight = FontWeight.Bold, color = Color.White)
+        }
+
+        Text(
+            text = "Already have an account? Log In",
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.padding(top = 24.dp).clickable { onNavigateToLogin() }
+        )
     }
 }
 
@@ -104,11 +166,11 @@ fun AuthInput(value: String, onValueChange: (String) -> Unit, label: String, isP
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = RivalsRed,
-            unfocusedBorderColor = Color.LightGray,
-            focusedTextColor = Color.Black,
-            unfocusedTextColor = Color.Black,
+            unfocusedBorderColor = Color.Black,
             focusedContainerColor = LightSurface,
-            unfocusedContainerColor = LightSurface
+            unfocusedContainerColor = LightSurface,
+            focusedTextColor = Color.Black,
+            unfocusedTextColor = Color.Black
         )
     )
 }

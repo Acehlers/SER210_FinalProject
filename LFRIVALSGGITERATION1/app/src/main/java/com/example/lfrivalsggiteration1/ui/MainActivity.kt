@@ -11,18 +11,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import com.example.lfrivalsggiteration1.ui.theme.LFRIVALSGGITERATION1Theme
 import com.example.lfrivalsggiteration1.ui.theme.RivalsRed
 
 sealed class Screen(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    data object Board : Screen("Board", Icons.AutoMirrored.Filled.List)
-    data object Stats : Screen("Stats", Icons.Default.Info)
-    data object Profile : Screen("Profile", Icons.Default.Person)
+    data object Board   : Screen("Board",    Icons.AutoMirrored.Filled.List)
+    data object Stats   : Screen("Meta",     Icons.Default.Info)
+    data object MyStats : Screen("My Stats", Icons.Default.Star)
+    data object Profile : Screen("Profile",  Icons.Default.Person)
 }
 
 class MainActivity : ComponentActivity() {
@@ -32,9 +33,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             LFRIVALSGGITERATION1Theme {
-                Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     var isLoggedIn by remember { mutableStateOf(viewModel.isRememberMeEnabled()) }
-
                     if (!isLoggedIn) {
                         AuthManager(vm = viewModel, onAuthComplete = { isLoggedIn = true })
                     } else {
@@ -49,13 +49,13 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScaffold(vm: MainViewModel, onLogout: () -> Unit) {
-    val tabs = listOf(Screen.Board, Screen.Stats, Screen.Profile)
+    val tabs = listOf(Screen.Board, Screen.Stats, Screen.MyStats, Screen.Profile)
     var selectedTab by remember { mutableStateOf<Screen>(Screen.Board) }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.primary,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 tabs.forEach { screen ->
                     NavigationBarItem(
                         selected = selectedTab == screen,
@@ -74,8 +74,9 @@ fun MainScaffold(vm: MainViewModel, onLogout: () -> Unit) {
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (selectedTab) {
-                is Screen.Board -> BoardScreen(vm)
-                is Screen.Stats -> StatsScreen(vm)
+                is Screen.Board   -> BoardScreen(vm)
+                is Screen.Stats   -> StatsScreen(vm)
+                is Screen.MyStats -> MyStatsScreen(vm)
                 is Screen.Profile -> ProfileScreen(vm, onLogout)
             }
         }

@@ -3,7 +3,6 @@ package com.example.lfrivalsggiteration1.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -15,14 +14,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.lfrivalsggiteration1.data.HeroStatResponse
+import com.example.lfrivalsggiteration1.data.MetaHeroStat
 
 private val RivalsRed = Color(0xFFD32F2F)
+private val WinGreen  = Color(0xFF4CAF50)
+private val BanOrange = Color(0xFFFF9800)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
-    val stats by vm.heroStats.collectAsState()
+    val stats by vm.metaStats.collectAsState()
+
+    var sortBy by remember { mutableStateOf("WIN") }
+    val sorted = remember(stats, sortBy) {
+        when (sortBy) {
+            "WIN"  -> stats.sortedByDescending { it.winRate }
+            "PICK" -> stats.sortedByDescending { it.pickRate }
+            "BAN"  -> stats.sortedByDescending { it.banRate }
+            else   -> stats
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -31,59 +42,97 @@ fun StatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 title = { Text("Hero Stats", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { vm.fetchStats() }, enabled = !vm.isLoading) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh stats")
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding)
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding)
         ) {
-            // Filter Section
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilterRow("PLATFORM:", listOf("PC", "Console"), vm.selectedPlatform) { vm.updatePlatform(it) }
-                FilterRow("MODE:", listOf("QuickPlay", "Competitive"), vm.selectedMode) { vm.updateMode(it) }
+            // Source banner
+            Surface(
+                color = RivalsRed.copy(alpha = 0.1f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Season 7.5 stats — source: metabot.gg (Apr 24, 2026)",
+                    fontSize = 11.sp,
+                    color = RivalsRed,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
             }
 
-            // Table Header
-            Row(modifier = Modifier.fillMaxWidth().background(Color(0xFFF5F5F5)).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text("HERO",    Modifier.weight(2f), fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.Gray)
-                Text("WINS",    Modifier.weight(1f), fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.Gray)
-                Text("MATCHES", Modifier.weight(1f), fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.Gray)
-            }
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    vm.isLoading && stats.isEmpty() -> {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = RivalsRed)
-                    }
-                    !vm.isLoading && stats.isEmpty() -> {
-                        Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("No stats loaded", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = { vm.fetchStats() }, colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)) {
-                                Text("Retry")
-                            }
-                        }
-                    }
-                    else -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(stats) { hero ->
-                                HeroStatItem(hero)
-                                HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 0.5.dp)
+            // Sort tabs
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf("WIN" to "Win Rate", "PICK" to "Pick Rate", "BAN" to "Ban Rate").forEach { (key, label) ->
+                    TextButton(
+                        onClick = { sortBy = key },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = if (sortBy == key) RivalsRed
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                label,
+                                fontSize = 12.sp,
+                                fontWeight = if (sortBy == key) FontWeight.Black else FontWeight.Normal
+                            )
+                            if (sortBy == key) {
+                                Box(Modifier.height(2.dp).width(56.dp).background(RivalsRed))
                             }
                         }
                     }
                 }
+            }
 
-                // Thin progress bar when refreshing existing data
-                if (vm.isLoading && stats.isNotEmpty()) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
-                        color = RivalsRed
-                    )
+            // Column headers
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                Text("#",     Modifier.width(28.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("HERO",  Modifier.weight(2f),   fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("WIN%",  Modifier.weight(1f),   fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("PICK%", Modifier.weight(1f),   fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("BAN%",  Modifier.weight(1f),   fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (stats.isEmpty()) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("No data", color = MaterialTheme.colorScheme.onBackground)
+                        Button(
+                            onClick = { vm.fetchStats() },
+                            colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)
+                        ) { Text("Retry") }
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(sorted.size) { index ->
+                            MetaHeroRow(rank = index + 1, hero = sorted[index], sortBy = sortBy)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                        }
+                    }
                 }
             }
         }
@@ -93,14 +142,14 @@ fun StatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 @Composable
 fun FilterRow(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.width(90.dp), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.DarkGray)
+        Text(label, modifier = Modifier.width(90.dp), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { option ->
                 Button(
                     onClick = { onSelect(option) },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selected == option) RivalsRed else Color(0xFFE0E0E0),
-                        contentColor = if (selected == option) Color.White else Color.Black
+                        containerColor = if (selected == option) RivalsRed else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (selected == option) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.height(32.dp),
@@ -114,13 +163,59 @@ fun FilterRow(label: String, options: List<String>, selected: String, onSelect: 
 }
 
 @Composable
-fun HeroStatItem(hero: HeroStatResponse) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+fun MetaHeroRow(rank: Int, hero: MetaHeroStat, sortBy: String) {
+    val roleColor = when (hero.role) {
+        "Vanguard"   -> Color(0xFF2196F3)
+        "Duelist"    -> RivalsRed
+        "Strategist" -> WinGreen
+        else         -> Color.Gray
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("$rank", modifier = Modifier.width(28.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
         Column(modifier = Modifier.weight(2f)) {
-            Text(hero.heroName.uppercase(), fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color.Black)
-            Text("PLAYTIME: ${hero.playTime}", fontSize = 11.sp, color = RivalsRed)
+            Text(hero.heroName, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+            Surface(color = roleColor.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
+                Text(
+                    hero.role.uppercase(),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    fontSize = 9.sp, color = roleColor, fontWeight = FontWeight.Black
+                )
+            }
         }
-        Text("${hero.wins}",    Modifier.weight(1f), fontWeight = FontWeight.Bold, color = Color.Black)
-        Text("${hero.matches}", Modifier.weight(1f), color = Color.Gray)
+
+        Text(
+            "${"%.1f".format(hero.winRate)}%",
+            modifier = Modifier.weight(1f),
+            fontSize = 13.sp,
+            fontWeight = if (sortBy == "WIN") FontWeight.Black else FontWeight.Normal,
+            color = when {
+                hero.winRate >= 55f -> WinGreen
+                hero.winRate >= 50f -> MaterialTheme.colorScheme.onBackground
+                else -> RivalsRed
+            }
+        )
+
+        Text(
+            "${"%.1f".format(hero.pickRate)}%",
+            modifier = Modifier.weight(1f),
+            fontSize = 13.sp,
+            fontWeight = if (sortBy == "PICK") FontWeight.Black else FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        Text(
+            "${"%.1f".format(hero.banRate)}%",
+            modifier = Modifier.weight(1f),
+            fontSize = 13.sp,
+            fontWeight = if (sortBy == "BAN") FontWeight.Black else FontWeight.Normal,
+            color = if (hero.banRate >= 15f) BanOrange else MaterialTheme.colorScheme.onBackground
+        )
     }
 }

@@ -2,25 +2,15 @@ package com.example.lfrivalsggiteration1.data
 
 import android.content.Context
 import androidx.lifecycle.LiveData
-import androidx.room.Dao
-import androidx.room.Database
-import androidx.room.Delete
-import androidx.room.Entity
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.PrimaryKey
-import androidx.room.Query
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.room.Update
-
-// ─── Entities ────────────────────────────────────────────────────────────────
+import androidx.room.*
 
 @Entity(tableName = "users")
 data class User(
     @PrimaryKey(autoGenerate = true) val userID: Int = 0,
     val gamertag: String,
-    val discordHandle: String
+    val discordHandle: String,
+    val username: String = "",
+    val password: String = ""
 )
 
 @Entity(tableName = "posts")
@@ -34,8 +24,6 @@ data class Post(
     val expiresAt: Long
 )
 
-// ─── DAOs ─────────────────────────────────────────────────────────────────────
-
 @Dao
 interface UserDao {
     @Query("SELECT * FROM users LIMIT 1")
@@ -43,6 +31,12 @@ interface UserDao {
 
     @Query("SELECT * FROM users LIMIT 1")
     suspend fun getUserOnce(): User?
+
+    @Query("SELECT * FROM users WHERE username = :username AND password = :password LIMIT 1")
+    suspend fun login(username: String, password: String): User?
+
+    @Query("SELECT * FROM users WHERE username = :username LIMIT 1")
+    suspend fun findByUsername(username: String): User?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(user: User): Long
@@ -63,9 +57,7 @@ interface PostDao {
     suspend fun deletePost(post: Post): Int
 }
 
-// ─── Database ─────────────────────────────────────────────────────────────────
-
-@Database(entities = [User::class, Post::class], version = 1, exportSchema = false)
+@Database(entities = [User::class, Post::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun postDao(): PostDao
@@ -75,8 +67,14 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
-                Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "lfrivals_db")
-                    .build().also { INSTANCE = it }
+                Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "lfrivals_db"
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { INSTANCE = it }
             }
     }
 }

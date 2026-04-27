@@ -104,14 +104,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveProfile(gamertag: String, discord: String) {
+    fun saveProfile(gamertag: String, discord: String, imageUri: String = "") {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 val existing = db.userDao().getUserOnce()
                 if (existing != null) {
-                    db.userDao().updateUser(existing.copy(gamertag = gamertag, discordHandle = discord))
+                    db.userDao().updateUser(
+                        existing.copy(
+                            gamertag = gamertag,
+                            discordHandle = discord,
+                            profileImageUri = imageUri.ifBlank { existing.profileImageUri }
+                        )
+                    )
                 } else {
-                    db.userDao().insertUser(User(gamertag = gamertag, discordHandle = discord))
+                    db.userDao().insertUser(
+                        User(gamertag = gamertag, discordHandle = discord,
+                            profileImageUri = imageUri)
+                    )
                 }
             }
         }

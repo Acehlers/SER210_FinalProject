@@ -10,7 +10,8 @@ data class User(
     val gamertag: String,
     val discordHandle: String,
     val username: String = "",
-    val password: String = ""
+    val password: String = "",
+    val profileImageUri: String = ""
 )
 
 @Entity(tableName = "posts")
@@ -57,7 +58,7 @@ interface PostDao {
     suspend fun deletePost(post: Post): Int
 }
 
-@Database(entities = [User::class, Post::class], version = 2, exportSchema = false)
+@Database(entities = [User::class, Post::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun postDao(): PostDao

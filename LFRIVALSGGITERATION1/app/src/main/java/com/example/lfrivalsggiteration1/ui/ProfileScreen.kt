@@ -40,6 +40,9 @@ fun ProfileScreen(vm: MainViewModel, onLogout: () -> Unit, modifier: Modifier = 
         currentUser?.let {
             if (gamertag.isEmpty()) gamertag = it.gamertag
             if (discord.isEmpty()) discord = it.discordHandle
+            if (imageUri == null && it.profileImageUri.isNotBlank()) {
+                imageUri = Uri.parse(it.profileImageUri)
+            }
         }
     }
 
@@ -77,7 +80,7 @@ fun ProfileScreen(vm: MainViewModel, onLogout: () -> Unit, modifier: Modifier = 
         Button(
             onClick = {
                 if (gamertag.isBlank()) { gamertagError = true; return@Button }
-                vm.saveProfile(gamertag, discord)
+                vm.saveProfile(gamertag, discord, imageUri?.toString() ?: "")
                 saved = true
             },
             modifier = Modifier.fillMaxWidth(),

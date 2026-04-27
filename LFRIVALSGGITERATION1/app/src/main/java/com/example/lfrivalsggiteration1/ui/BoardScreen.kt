@@ -1,5 +1,6 @@
 package com.example.lfrivalsggiteration1.ui
 
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,9 +15,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.lfrivalsggiteration1.data.Post
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,6 +121,7 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             creatorName = displayName,
                             isAccepted = post.postID in acceptedIds,
                             discordHandle = if (post.postID in acceptedIds) currentUser?.discordHandle else null,
+                            profileImageUri = if (post.userID == currentUser?.userID) currentUser?.profileImageUri else null,
                             onAccept = { vm.acceptPost(post.postID) }
                         )
                     }
@@ -142,6 +147,7 @@ fun PostCard(
     creatorName: String,
     isAccepted: Boolean,
     discordHandle: String?,
+    profileImageUri: String?,
     onAccept: () -> Unit
 ) {
     Card(
@@ -158,12 +164,29 @@ fun PostCard(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.secondary
             ) {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = null,
-                    modifier = Modifier.padding(6.dp),
-                    tint = Color.White
-                )
+                if (!profileImageUri.isNullOrBlank()) {
+                    AsyncImage(
+                        model = Uri.parse(profileImageUri),
+                        contentDescription = "Profile picture",
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.size(50.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.padding(6.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.width(16.dp))

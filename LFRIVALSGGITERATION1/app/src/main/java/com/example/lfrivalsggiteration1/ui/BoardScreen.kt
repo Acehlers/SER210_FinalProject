@@ -111,10 +111,9 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filteredPosts, key = { it.postID }) { post ->
-                        val displayName = if (post.userID == currentUser?.userID) {
-                            currentUser?.gamertag ?: "You"
-                        } else {
-                            "Rival#${post.userID}"
+                        val displayName = post.username.ifBlank {
+                            if (post.userID == currentUser?.userID) currentUser?.gamertag ?: "You"
+                            else "Unknown"
                         }
                         PostCard(
                             post = post,

@@ -14,17 +14,6 @@ data class User(
     val profileImageUri: String = ""
 )
 
-@Entity(tableName = "posts")
-data class Post(
-    @PrimaryKey(autoGenerate = true) val postID: Int = 0,
-    val userID: Int,
-    val hero: String,
-    val role: String,
-    val rank: String,
-    val content: String,
-    val expiresAt: Long
-)
-
 @Dao
 interface UserDao {
     @Query("SELECT * FROM users LIMIT 1")
@@ -46,22 +35,9 @@ interface UserDao {
     suspend fun updateUser(user: User): Int
 }
 
-@Dao
-interface PostDao {
-    @Query("SELECT * FROM posts WHERE expiresAt > :now ORDER BY expiresAt ASC")
-    fun getActivePosts(now: Long = System.currentTimeMillis()): LiveData<List<Post>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPost(post: Post): Long
-
-    @Delete
-    suspend fun deletePost(post: Post): Int
-}
-
-@Database(entities = [User::class, Post::class], version = 3, exportSchema = false)
+@Database(entities = [User::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
-    abstract fun postDao(): PostDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "905477373601",
+    "project_id": "lfrivalsgg",
+    "storage_bucket": "lfrivalsgg.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:905477373601:android:042ce825ef43517d98fae0",
+        "android_client_info": {
+          "package_name": "com.example.lfrivalsggiteration1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBH-mzG3hpAS2JCs6W6YgokqUFQZdCFufE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

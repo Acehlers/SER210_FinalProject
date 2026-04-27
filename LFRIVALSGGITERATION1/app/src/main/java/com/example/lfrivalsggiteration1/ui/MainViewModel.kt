@@ -7,16 +7,22 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.lfrivalsggiteration1.data.*
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val db = AppDatabase.getDatabase(application)
-    private val prefs = application.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
+    private val db        = AppDatabase.getDatabase(application)
+    private val firestore = Firebase.firestore
+    private val auth      = Firebase.auth
+    private val prefs     = application.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
 
     // ─── User & Posts ─────────────────────────────────────────────────────────
     private val _currentUser = MutableStateFlow<User?>(null)
@@ -25,27 +31,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _activePosts = MutableStateFlow<List<Post>>(emptyList())
     val activePosts: StateFlow<List<Post>> = _activePosts
 
-    private val _acceptedPostIds = MutableStateFlow<Set<Int>>(emptySet())
-    val acceptedPostIds: StateFlow<Set<Int>> = _acceptedPostIds
+    private val _acceptedPostIds = MutableStateFlow<Set<String>>(emptySet())
+    val acceptedPostIds: StateFlow<Set<String>> = _acceptedPostIds
 
-    // ─── Meta stats (hardcoded) ───────────────────────────────────────────────
+    // ─── Meta stats ───────────────────────────────────────────────────────────
     private val _metaStats = MutableStateFlow<List<MetaHeroStat>>(emptyList())
     val metaStats: StateFlow<List<MetaHeroStat>> = _metaStats
 
-    var statsError by mutableStateOf("")
-    var isLoading by mutableStateOf(false)
+    var statsError       by mutableStateOf("")
+    var isLoading        by mutableStateOf(false)
+    var isLoadingPlayer  by mutableStateOf(false)
+    var playerStatsError by mutableStateOf("")
 
-    // ─── Personal stats (live API) ────────────────────────────────────────────
     private val _playerStats = MutableStateFlow<PlayerStatsResponse?>(null)
     val playerStats: StateFlow<PlayerStatsResponse?> = _playerStats
 
-    var isLoadingPlayer by mutableStateOf(false)
-    var playerStatsError by mutableStateOf("")
-
     init {
         fetchStats()
-        db.userDao().getUser().observeForever { _currentUser.value = it }
-        db.postDao().getActivePosts().observeForever { _activePosts.value = it ?: emptyList() }
+        listenToPosts()
+        auth.currentUser?.let {
+            viewModelScope.launch {
+                val local = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
+                _currentUser.value = local
+            }
+        }
+    }
+
+    // ─── Firestore: real-time post listener ───────────────────────────────────
+    private fun listenToPosts() {
+        val now = System.currentTimeMillis()
+        firestore.collection("posts")
+            .whereGreaterThan("expiresAt", now)
+            .orderBy("expiresAt")
+            .addSnapshotListener { snapshots, error ->
+                if (error != null) {
+                    Log.e("Firestore", "Posts listener failed", error)
+                    return@addSnapshotListener
+                }
+                _activePosts.value = snapshots?.documents?.mapNotNull { doc ->
+                    try {
+                        Post(
+                            postID    = doc.id,
+                            userID    = (doc.getLong("userID") ?: 0L).toInt(),
+                            username  = doc.getString("username") ?: "",
+                            hero      = doc.getString("hero") ?: "",
+                            role      = doc.getString("role") ?: "",
+                            rank      = doc.getString("rank") ?: "",
+                            content   = doc.getString("content") ?: "",
+                            expiresAt = doc.getLong("expiresAt") ?: 0L
+                        )
+                    } catch (e: Exception) { null }
+                } ?: emptyList()
+            }
     }
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -57,50 +94,93 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .putString("saved_username", username)
             .apply()
     }
-    fun logout(onComplete: () -> Unit) {
-        prefs.edit().putBoolean("remember_me", false).apply()
-        _playerStats.value = null
-        playerStatsError = ""
-        onComplete()
-    }
 
     fun login(username: String, password: String, onResult: (Boolean) -> Unit) {
+        val email = "${username.trim().lowercase()}@lfrivals.app"
         viewModelScope.launch {
-            val user = withContext(Dispatchers.IO) { db.userDao().login(username, password) }
-            onResult(user != null)
-        }
-    }
-
-    fun signUp(username: String, password: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            val existing = withContext(Dispatchers.IO) { db.userDao().findByUsername(username) }
-            if (existing != null) {
-                onResult(false)
-            } else {
-                withContext(Dispatchers.IO) {
-                    db.userDao().insertUser(
-                        User(gamertag = username, discordHandle = "", username = username, password = password)
-                    )
+            try {
+                auth.signInWithEmailAndPassword(email, password).await()
+                var local = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
+                if (local == null || local.username != username) {
+                    val uid = auth.currentUser?.uid ?: ""
+                    val doc = firestore.collection("users").document(uid).get().await()
+                    val gamertag = doc.getString("gamertag") ?: username
+                    val discord  = doc.getString("discordHandle") ?: ""
+                    withContext(Dispatchers.IO) {
+                        db.userDao().insertUser(
+                            User(gamertag = gamertag, discordHandle = discord,
+                                username = username, password = "")
+                        )
+                    }
+                    local = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
                 }
+                _currentUser.value = local
                 onResult(true)
+            } catch (e: Exception) {
+                Log.e("Auth", "Login failed: ${e.localizedMessage}")
+                onResult(false)
             }
         }
     }
 
+    fun signUp(username: String, password: String, onResult: (Boolean) -> Unit) {
+        val email = "${username.trim().lowercase()}@lfrivals.app"
+        viewModelScope.launch {
+            try {
+                val result = auth.createUserWithEmailAndPassword(email, password).await()
+                val uid = result.user?.uid ?: throw Exception("No UID")
+                firestore.collection("users").document(uid).set(
+                    mapOf(
+                        "username"      to username,
+                        "gamertag"      to username,
+                        "discordHandle" to ""
+                    )
+                ).await()
+                withContext(Dispatchers.IO) {
+                    db.userDao().insertUser(
+                        User(gamertag = username, discordHandle = "",
+                            username = username, password = "")
+                    )
+                }
+                _currentUser.value = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
+                onResult(true)
+            } catch (e: Exception) {
+                Log.e("Auth", "Sign up failed: ${e.localizedMessage}")
+                onResult(false)
+            }
+        }
+    }
+
+    fun logout(onComplete: () -> Unit) {
+        auth.signOut()
+        prefs.edit().putBoolean("remember_me", false).apply()
+        _playerStats.value = null
+        playerStatsError = ""
+        _currentUser.value = null
+        onComplete()
+    }
+
     // ─── Post actions ─────────────────────────────────────────────────────────
-    fun acceptPost(postID: Int) {
+    fun acceptPost(postID: String) {
         _acceptedPostIds.value = _acceptedPostIds.value + postID
     }
 
     fun createPost(hero: String, role: String, rank: String, message: String) {
         viewModelScope.launch {
-            val user = withContext(Dispatchers.IO) { db.userDao().getUserOnce() } ?: return@launch
-            val post = Post(
-                userID = user.userID,
-                hero = hero, role = role, rank = rank, content = message,
-                expiresAt = System.currentTimeMillis() + 30 * 60 * 1000L
-            )
-            withContext(Dispatchers.IO) { db.postDao().insertPost(post) }
+            val user = _currentUser.value ?: return@launch
+            val uid  = auth.currentUser?.uid ?: return@launch
+            firestore.collection("posts").add(
+                hashMapOf(
+                    "uid"       to uid,
+                    "userID"    to user.userID,
+                    "username"  to user.gamertag,
+                    "hero"      to hero,
+                    "role"      to role,
+                    "rank"      to rank,
+                    "content"   to message,
+                    "expiresAt" to (System.currentTimeMillis() + 30 * 60 * 1000L)
+                )
+            ).addOnFailureListener { Log.e("Firestore", "Failed to create post", it) }
         }
     }
 
@@ -123,10 +203,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             }
+            auth.currentUser?.uid?.let { uid ->
+                firestore.collection("users").document(uid).update(
+                    mapOf("gamertag" to gamertag, "discordHandle" to discord)
+                )
+            }
+            _currentUser.value = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
         }
     }
 
-    // ─── Meta stats — hardcoded Season 7.5 (source: https://metabot.gg/en/marvelrivals/heroes/win-rate Apr 24 2026 & https://beebom.com/marvel-rivals-ban-rates/) ──
+    // ─── Meta stats ───────────────────────────────────────────────────────────
     fun fetchStats() = viewModelScope.launch {
         isLoading = true
         statsError = ""
@@ -183,46 +269,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ─── Personal stats fetch (live API) ──────────────────────────────────────
+    // ─── Personal stats (live API) ────────────────────────────────────────────
     fun fetchPlayerStats(query: String) = viewModelScope.launch {
-        if (query.isBlank()) {
-            playerStatsError = "Enter your UID or in-game name"
-            return@launch
-        }
+        if (query.isBlank()) { playerStatsError = "Enter your UID or in-game name"; return@launch }
         isLoadingPlayer = true
         playerStatsError = ""
         _playerStats.value = null
-
         val apiKey = "d5c57e773061d9793e5f031f2e4aacbd871cd7025aad6c3e96ce2ec6cebc361f"
-
         try {
             val uidToUse = try {
-                val found = withContext(Dispatchers.IO) {
-                    RetrofitClient.api.findPlayer(apiKey, query)
-                }
-                Log.d("PLAYER_STATS", "find-player: uid=${found.uid} name=${found.name}")
+                val found = withContext(Dispatchers.IO) { RetrofitClient.api.findPlayer(apiKey, query) }
                 found.uid.ifBlank { query }
-            } catch (e: Exception) {
-                Log.d("PLAYER_STATS", "find-player failed: ${e.localizedMessage}")
-                query
-            }
-
-            Log.d("PLAYER_STATS", "Fetching stats for: $uidToUse")
-            val result = withContext(Dispatchers.IO) {
+            } catch (e: Exception) { query }
+            _playerStats.value = withContext(Dispatchers.IO) {
                 RetrofitClient.api.getPlayerStats(apiKey, uidToUse)
             }
-            _playerStats.value = result
-            Log.d("PLAYER_STATS", "Success: ${result.name}")
-
         } catch (e: Exception) {
-            Log.e("PLAYER_STATS", "getPlayerStats failed: ${e.localizedMessage}")
             try {
                 withContext(Dispatchers.IO) { RetrofitClient.api.updatePlayer(apiKey, query) }
                 playerStatsError = "Player is being indexed. Try again in 1-2 minutes."
             } catch (e2: Exception) {
-                Log.e("PLAYER_STATS", "updatePlayer failed: ${e2.localizedMessage}")
-                playerStatsError = "Personal stats require a premium Marvel Rivals API subscription. " +
-                        "The API call was made successfully but returned a 403 Forbidden response."
+                playerStatsError = "Personal stats require a premium Marvel Rivals API subscription."
             }
         } finally {
             isLoadingPlayer = false

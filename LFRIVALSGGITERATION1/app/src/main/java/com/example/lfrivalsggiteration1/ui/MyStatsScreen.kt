@@ -28,7 +28,6 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val currentUser by vm.currentUser.collectAsState()
     val playerStats by vm.playerStats.collectAsState()
 
-    // Pre-fill gamertag from saved profile
     var searchGamertag by remember(currentUser) {
         mutableStateOf(currentUser?.gamertag ?: "")
     }
@@ -49,7 +48,6 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
-
             Spacer(Modifier.height(12.dp))
 
             // ── Search bar ────────────────────────────────────────────────────
@@ -86,7 +84,6 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
 
-            // ── Hint text ─────────────────────────────────────────────────────
             Text(
                 "Use your exact Marvel Rivals in-game name",
                 fontSize = 11.sp,
@@ -94,7 +91,7 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
 
-            // ── Error ─────────────────────────────────────────────────────────
+            // ── Error / premium warning ───────────────────────────────────────
             if (vm.playerStatsError.isNotEmpty()) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Red.copy(alpha = 0.1f)),
@@ -112,7 +109,11 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
             // ── Results ───────────────────────────────────────────────────────
             playerStats?.let { stats ->
-                // Player summary card
+                val displayName = stats.player.name.ifBlank { stats.name }
+                val rawLevel = stats.player.level
+                val levelDisplay = if (rawLevel.isNotBlank() && rawLevel != "0") "Level $rawLevel" else "Level unknown"
+                val rankDisplay = stats.player.rank.rank.ifBlank { "Unranked" }
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -125,13 +126,13 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     ) {
                         Column {
                             Text(
-                                stats.player.name.ifBlank { stats.name },
+                                displayName,
                                 fontWeight = FontWeight.Black,
                                 fontSize = 20.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "Level ${stats.player.level}",
+                                levelDisplay,
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -141,7 +142,7 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                stats.player.rank.rank,
+                                rankDisplay,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -151,10 +152,31 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
 
-                // Hero stats table header
-                if (stats.player.heroStats.isNotEmpty()) {
+                // ── Premium notice if no hero data ────────────────────────────
+                if (stats.player.heroStats.isEmpty()) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Red.copy(alpha = 0.08f)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Hero stats unavailable",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Red
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Detailed hero stats require a premium Marvel Rivals API subscription. Only basic profile info is available on the free tier.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -169,26 +191,15 @@ fun MyStatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
                     Spacer(Modifier.height(4.dp))
 
-                    val sortedHeroes = stats.player.heroStats.sortedByDescending { it.matches }
-
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(sortedHeroes) { hero ->
+                        items(stats.player.heroStats.sortedByDescending { it.matches }) { hero ->
                             PersonalHeroRow(hero)
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
                         }
                     }
-                } else {
-                    // Player found but no hero data
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            "No hero data found for this player yet.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
 
             } ?: run {
-                // Nothing loaded yet — show empty state
                 if (!vm.isLoadingPlayer) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {

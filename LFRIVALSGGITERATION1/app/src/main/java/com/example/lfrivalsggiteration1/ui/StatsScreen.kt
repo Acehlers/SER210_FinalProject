@@ -61,7 +61,7 @@ fun StatsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    "Season 7.5 stats — source: metabot.gg (Apr 24, 2026)",
+                    "Season 7.5 stats — source: metabot.gg (Apr 24, 2026) & beebom.com",
                     fontSize = 11.sp,
                     color = RivalsRed,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

@@ -117,7 +117,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ─── Meta stats — hardcoded Season 7.5 (source: metabot.gg Apr 24 2026) ──
+    // ─── Meta stats — hardcoded Season 7.5 (source: https://metabot.gg/en/marvelrivals/heroes/win-rate Apr 24 2026 & https://beebom.com/marvel-rivals-ban-rates/) ──
     fun fetchStats() = viewModelScope.launch {
         isLoading = true
         statsError = ""

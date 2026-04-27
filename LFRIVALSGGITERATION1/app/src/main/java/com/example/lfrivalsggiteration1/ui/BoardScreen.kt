@@ -57,7 +57,7 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showCreator = true },
-                containerColor = MaterialTheme.colorScheme.primary,
+                containerColor = MaterialTheme.colorScheme.secondary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Create Post")
@@ -119,6 +119,7 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             post = post,
                             creatorName = displayName,
                             isAccepted = post.postID in acceptedIds,
+                            isOwnPost = post.username == currentUser?.gamertag,
                             discordHandle = if (post.postID in acceptedIds) currentUser?.discordHandle else null,
                             profileImageUri = if (post.userID == currentUser?.userID) currentUser?.profileImageUri else null,
                             onAccept = { vm.acceptPost(post.postID) }
@@ -145,6 +146,7 @@ fun PostCard(
     post: Post,
     creatorName: String,
     isAccepted: Boolean,
+    isOwnPost: Boolean,
     discordHandle: String?,
     profileImageUri: String?,
     onAccept: () -> Unit
@@ -215,15 +217,18 @@ fun PostCard(
                 }
             }
 
-            IconButton(
-                onClick = onAccept,
-                enabled = !isAccepted,
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = if (isAccepted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                )
-            ) {
-                if (isAccepted) Icon(Icons.Default.CheckCircle, "Accepted")
-                else Icon(Icons.Default.Add, "Accept")
+            if (!isOwnPost) {
+                IconButton(
+                    onClick = onAccept,
+                    enabled = !isAccepted,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = if (isAccepted) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    if (isAccepted) Icon(Icons.Default.CheckCircle, "Accepted")
+                    else Icon(Icons.Default.Add, "Accept")
+                }
             }
         }
     }

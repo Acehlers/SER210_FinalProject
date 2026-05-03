@@ -6,9 +6,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,83 +22,227 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.lfrivalsggiteration1.ui.theme.RivalsRed
 
 @Composable
 fun ProfileScreen(vm: MainViewModel, onLogout: () -> Unit, modifier: Modifier = Modifier) {
-    // observeAsState requires the 'androidx.compose.runtime.getValue' import
-    val currentUser by vm.currentUser.collectAsState()
-    var gamertag by remember { mutableStateOf("") }
-    var discord  by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var saved    by remember { mutableStateOf(false) }
-    var gamertagError by remember { mutableStateOf(false) }
+    val currentUser     by vm.currentUser.collectAsState()
+    val preferences     by vm.userPreferences.collectAsState()
+    val myPostHistory   by vm.myPostHistory.collectAsState()
+    val acceptedMyPosts by vm.acceptedMyPosts.collectAsState()
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        imageUri = uri
-        saved = false
-    }
+    var gamertag      by remember { mutableStateOf("") }
+    var discord       by remember { mutableStateOf("") }
+    var imageUri      by remember { mutableStateOf<Uri?>(null) }
+    var saved         by remember { mutableStateOf(false) }
+    var gamertagError by remember { mutableStateOf(false) }
+    var showHistory   by remember { mutableStateOf(false) }
+
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> imageUri = uri; saved = false }
 
     LaunchedEffect(currentUser) {
         currentUser?.let {
             if (gamertag.isEmpty()) gamertag = it.gamertag
-            if (discord.isEmpty()) discord = it.discordHandle
-            if (imageUri == null && it.profileImageUri.isNotBlank()) {
-                imageUri = Uri.parse(it.profileImageUri)
-            }
+            if (discord.isEmpty())  discord  = it.discordHandle
         }
     }
 
-    Column(
-        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp),
+    LaunchedEffect(showHistory) {
+        if (showHistory) vm.loadMyPostHistory()
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(
-            modifier = Modifier.size(100.dp).clip(CircleShape).background(Color(0xFFEEEEEE)).clickable { launcher.launch("image/*") },
-            contentAlignment = Alignment.Center
-        ) {
-            if (imageUri != null) {
-                AsyncImage(model = imageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            } else {
-                Icon(Icons.Default.AccountCircle, null, Modifier.size(64.dp), tint = Color.Gray)
+        item {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEEEEEE))
+                    .clickable { launcher.launch("image/*") },
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageUri != null) {
+                    AsyncImage(model = imageUri, contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop)
+                } else {
+                    Icon(Icons.Default.AccountCircle, null,
+                        Modifier.size(64.dp), tint = Color.Gray)
+                }
             }
         }
 
-        OutlinedTextField(
-            value = gamertag,
-            onValueChange = { gamertag = it; gamertagError = false; saved = false },
-            label = { Text("Gamertag") },
-            modifier = Modifier.fillMaxWidth(),
-            isError = gamertagError
-        )
+        item {
+            OutlinedTextField(
+                value = gamertag,
+                onValueChange = { gamertag = it; gamertagError = false; saved = false },
+                label = { Text("Gamertag") },
+                modifier = Modifier.fillMaxWidth(),
+                isError = gamertagError
+            )
+        }
+        item {
+            OutlinedTextField(
+                value = discord,
+                onValueChange = { discord = it; saved = false },
+                label = { Text("Discord Handle") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        item {
+            Button(
+                onClick = {
+                    if (gamertag.isBlank()) { gamertagError = true; return@Button }
+                    vm.saveProfile(gamertag, discord)
+                    saved = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)
+            ) { Text("SAVE PROFILE", fontWeight = FontWeight.Bold) }
+            if (saved) Text("Profile saved!", color = RivalsRed)
+        }
 
-        OutlinedTextField(
-            value = discord,
-            onValueChange = { discord = it; saved = false },
-            label = { Text("Discord Handle") },
-            modifier = Modifier.fillMaxWidth()
-        )
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Preferences", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Dark Mode")
+                        Switch(
+                            checked = preferences.darkMode,
+                            onCheckedChange = { vm.updateDarkMode(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = RivalsRed,
+                                checkedTrackColor = RivalsRed.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Post Notifications")
+                        Switch(
+                            checked = preferences.notificationsEnabled,
+                            onCheckedChange = { vm.updateNotifications(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = RivalsRed,
+                                checkedTrackColor = RivalsRed.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+                }
+            }
+        }
 
-        Button(
-            onClick = {
-                if (gamertag.isBlank()) { gamertagError = true; return@Button }
-                vm.saveProfile(gamertag, discord, imageUri?.toString() ?: "")
-                saved = true
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)
-        ) { Text("SAVE PROFILE", fontWeight = FontWeight.Bold) }
+        item {
+            Button(
+                onClick = { showHistory = !showHistory },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Text(
+                    if (showHistory) "Hide Post History" else "View Post History",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
-        if (saved) Text("Profile saved!", color = RivalsRed)
+        if (showHistory) {
+            if (myPostHistory.isEmpty()) {
+                item {
+                    Text("No posts yet.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                items(myPostHistory) { post ->
+                    val isExpired   = post.expiresAt < System.currentTimeMillis()
+                    val wasAccepted = post.postID in acceptedMyPosts
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = when {
+                                wasAccepted -> Color(0xFF1B5E20).copy(alpha = 0.2f)
+                                isExpired   -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                else        -> MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(post.hero, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("•", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(post.role, fontSize = 13.sp)
+                                    Text("•", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(post.rank, fontSize = 13.sp)
+                                }
+                                if (post.content.isNotBlank()) {
+                                    Text(post.content, fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(
+                                    when {
+                                        wasAccepted -> "✓ Accepted"
+                                        isExpired   -> "Expired"
+                                        else        -> "Active"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = when {
+                                        wasAccepted -> Color(0xFF4CAF50)
+                                        isExpired   -> Color.Gray
+                                        else        -> RivalsRed
+                                    },
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            IconButton(onClick = { vm.deletePost(post.postID) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete",
+                                    tint = Color.Gray)
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = { vm.logout { onLogout() } },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)
-        ) { Text("LOG OUT", fontWeight = FontWeight.Bold) }
+        item { Spacer(Modifier.height(8.dp)) }
+        item {
+            Button(
+                onClick = { vm.logout { onLogout() } },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = RivalsRed)
+            ) { Text("LOG OUT", fontWeight = FontWeight.Bold) }
+        }
     }
 }

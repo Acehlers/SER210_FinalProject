@@ -8,8 +8,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.lfrivalsggiteration1.data.*
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.messaging.ktx.messaging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,12 +21,11 @@ import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val db        = AppDatabase.getDatabase(application)
+    private val db = AppDatabase.getDatabase(application)
     private val firestore = Firebase.firestore
-    private val auth      = Firebase.auth
-    private val prefs     = application.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
+    private val auth = Firebase.auth
+    private val prefs = application.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
 
-    // ─── User & Posts ─────────────────────────────────────────────────────────
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
 
@@ -34,7 +35,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _acceptedPostIds = MutableStateFlow<Set<String>>(emptySet())
     val acceptedPostIds: StateFlow<Set<String>> = _acceptedPostIds
 
-    // ─── Meta stats ───────────────────────────────────────────────────────────
+    private val _myPostHistory = MutableStateFlow<List<Post>>(emptyList())
+    val myPostHistory: StateFlow<List<Post>> = _myPostHistory
+
+    private val _acceptedMyPosts = MutableStateFlow<Set<String>>(emptySet())
+    val acceptedMyPosts: StateFlow<Set<String>> = _acceptedMyPosts
+
+    private val _userPreferences = MutableStateFlow(UserPreferences())
+    val userPreferences: StateFlow<UserPreferences> = _userPreferences
+
+    private val _inAppNotification = MutableStateFlow<String?>(null)
+    val inAppNotification: StateFlow<String?> = _inAppNotification
+
     private val _metaStats = MutableStateFlow<List<MetaHeroStat>>(emptyList())
     val metaStats: StateFlow<List<MetaHeroStat>> = _metaStats
 
@@ -46,6 +58,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _playerStats = MutableStateFlow<PlayerStatsResponse?>(null)
     val playerStats: StateFlow<PlayerStatsResponse?> = _playerStats
 
+    private var isFirstLoad = true
+
     init {
         fetchStats()
         listenToPosts()
@@ -53,11 +67,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 val local = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
                 _currentUser.value = local
+                loadUserPreferences()
+                listenToMyPostAcceptances()
             }
         }
     }
 
-    // ─── Firestore: real-time post listener ───────────────────────────────────
     private fun listenToPosts() {
         val now = System.currentTimeMillis()
         firestore.collection("posts")
@@ -68,10 +83,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     Log.e("Firestore", "Posts listener failed", error)
                     return@addSnapshotListener
                 }
-                _activePosts.value = snapshots?.documents?.mapNotNull { doc ->
+                val posts = snapshots?.documents?.mapNotNull { doc ->
                     try {
                         Post(
                             postID    = doc.id,
+                            uid       = doc.getString("uid") ?: "",
                             userID    = (doc.getLong("userID") ?: 0L).toInt(),
                             username  = doc.getString("username") ?: "",
                             hero      = doc.getString("hero") ?: "",
@@ -82,10 +98,122 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     } catch (e: Exception) { null }
                 } ?: emptyList()
+
+                if (!isFirstLoad && posts.size > _activePosts.value.size) {
+                    val newPost = posts.firstOrNull { p ->
+                        _activePosts.value.none { it.postID == p.postID }
+                    }
+                    if (newPost != null && _userPreferences.value.notificationsEnabled) {
+                        _inAppNotification.value =
+                            "New LFG: ${newPost.username} looking for group as ${newPost.hero}!"
+                    }
+                }
+                isFirstLoad = false
+                _activePosts.value = posts
             }
     }
 
-    // ─── Auth ─────────────────────────────────────────────────────────────────
+    fun dismissNotification() { _inAppNotification.value = null }
+
+    private fun listenToMyPostAcceptances() {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("posts")
+            .whereEqualTo("uid", uid)
+            .addSnapshotListener { snapshots, error ->
+                if (error != null) return@addSnapshotListener
+                val acceptedIds = snapshots?.documents
+                    ?.filter { (it.getLong("acceptCount") ?: 0L) > 0L }
+                    ?.map { it.id }
+                    ?.toSet() ?: emptySet()
+                _acceptedMyPosts.value = acceptedIds
+            }
+    }
+
+    fun loadMyPostHistory() {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("posts")
+            .whereEqualTo("uid", uid)
+            .get()
+            .addOnSuccessListener { snapshots ->
+                _myPostHistory.value = snapshots.documents.mapNotNull { doc ->
+                    try {
+                        Post(
+                            postID    = doc.id,
+                            uid       = doc.getString("uid") ?: "",
+                            userID    = (doc.getLong("userID") ?: 0L).toInt(),
+                            username  = doc.getString("username") ?: "",
+                            hero      = doc.getString("hero") ?: "",
+                            role      = doc.getString("role") ?: "",
+                            rank      = doc.getString("rank") ?: "",
+                            content   = doc.getString("content") ?: "",
+                            expiresAt = doc.getLong("expiresAt") ?: 0L
+                        )
+                    } catch (e: Exception) { null }
+                }
+            }
+    }
+
+    fun deletePost(postID: String) {
+        firestore.collection("posts").document(postID).delete()
+            .addOnSuccessListener {
+                _myPostHistory.value = _myPostHistory.value.filter { it.postID != postID }
+                _activePosts.value   = _activePosts.value.filter   { it.postID != postID }
+            }
+    }
+
+    private fun loadUserPreferences() {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("users").document(uid)
+            .addSnapshotListener { doc, _ ->
+                if (doc != null) {
+                    _userPreferences.value = UserPreferences(
+                        darkMode             = doc.getBoolean("darkMode") ?: false,
+                        notificationsEnabled = doc.getBoolean("notificationsEnabled") ?: true
+                    )
+                }
+            }
+    }
+
+    fun updateDarkMode(enabled: Boolean) {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("users").document(uid).update("darkMode", enabled)
+        _userPreferences.value = _userPreferences.value.copy(darkMode = enabled)
+    }
+
+    fun updateNotifications(enabled: Boolean) {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("users").document(uid).update("notificationsEnabled", enabled)
+        _userPreferences.value = _userPreferences.value.copy(notificationsEnabled = enabled)
+        if (enabled) Firebase.messaging.subscribeToTopic("new_posts")
+        else Firebase.messaging.unsubscribeFromTopic("new_posts")
+    }
+
+    fun acceptPost(postID: String) {
+        _acceptedPostIds.value = _acceptedPostIds.value + postID
+        firestore.collection("posts").document(postID)
+            .update("acceptCount", FieldValue.increment(1))
+    }
+
+    fun createPost(hero: String, role: String, rank: String, message: String) {
+        viewModelScope.launch {
+            val user = _currentUser.value ?: return@launch
+            val uid  = auth.currentUser?.uid ?: return@launch
+            firestore.collection("posts").add(
+                hashMapOf(
+                    "uid"         to uid,
+                    "userID"      to user.userID,
+                    "username"    to user.gamertag,
+                    "hero"        to hero,
+                    "role"        to role,
+                    "rank"        to rank,
+                    "content"     to message,
+                    "acceptCount" to 0,
+                    "expiresAt"   to (System.currentTimeMillis() + 30 * 60 * 1000L)
+                )
+            ).addOnFailureListener { Log.e("Firestore", "Failed to create post", it) }
+        }
+    }
+
     fun isRememberMeEnabled(): Boolean = prefs.getBoolean("remember_me", false)
     fun getSavedUsername(): String = prefs.getString("saved_username", "") ?: ""
     fun setRememberMe(username: String, remember: Boolean) {
@@ -115,6 +243,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     local = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
                 }
                 _currentUser.value = local
+                loadUserPreferences()
+                listenToMyPostAcceptances()
                 onResult(true)
             } catch (e: Exception) {
                 Log.e("Auth", "Login failed: ${e.localizedMessage}")
@@ -131,11 +261,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val uid = result.user?.uid ?: throw Exception("No UID")
                 firestore.collection("users").document(uid).set(
                     mapOf(
-                        "username"      to username,
-                        "gamertag"      to username,
-                        "discordHandle" to ""
+                        "username"             to username,
+                        "gamertag"             to username,
+                        "discordHandle"        to "",
+                        "darkMode"             to false,
+                        "notificationsEnabled" to true
                     )
                 ).await()
+                Firebase.messaging.subscribeToTopic("new_posts").await()
                 withContext(Dispatchers.IO) {
                     db.userDao().insertUser(
                         User(gamertag = username, discordHandle = "",
@@ -143,6 +276,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 _currentUser.value = withContext(Dispatchers.IO) { db.userDao().getUserOnce() }
+                loadUserPreferences()
+                listenToMyPostAcceptances()
                 onResult(true)
             } catch (e: Exception) {
                 Log.e("Auth", "Sign up failed: ${e.localizedMessage}")
@@ -154,53 +289,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun logout(onComplete: () -> Unit) {
         auth.signOut()
         prefs.edit().putBoolean("remember_me", false).apply()
-        _playerStats.value = null
-        playerStatsError = ""
-        _currentUser.value = null
+        _playerStats.value     = null
+        playerStatsError       = ""
+        _currentUser.value     = null
+        _myPostHistory.value   = emptyList()
+        _userPreferences.value = UserPreferences()
         onComplete()
     }
 
-    // ─── Post actions ─────────────────────────────────────────────────────────
-    fun acceptPost(postID: String) {
-        _acceptedPostIds.value = _acceptedPostIds.value + postID
-    }
-
-    fun createPost(hero: String, role: String, rank: String, message: String) {
-        viewModelScope.launch {
-            val user = _currentUser.value ?: return@launch
-            val uid  = auth.currentUser?.uid ?: return@launch
-            firestore.collection("posts").add(
-                hashMapOf(
-                    "uid"       to uid,
-                    "userID"    to user.userID,
-                    "username"  to user.gamertag,
-                    "hero"      to hero,
-                    "role"      to role,
-                    "rank"      to rank,
-                    "content"   to message,
-                    "expiresAt" to (System.currentTimeMillis() + 30 * 60 * 1000L)
-                )
-            ).addOnFailureListener { Log.e("Firestore", "Failed to create post", it) }
-        }
-    }
-
-    fun saveProfile(gamertag: String, discord: String, imageUri: String = "") {
+    fun saveProfile(gamertag: String, discord: String) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 val existing = db.userDao().getUserOnce()
                 if (existing != null) {
-                    db.userDao().updateUser(
-                        existing.copy(
-                            gamertag = gamertag,
-                            discordHandle = discord,
-                            profileImageUri = imageUri.ifBlank { existing.profileImageUri }
-                        )
-                    )
+                    db.userDao().updateUser(existing.copy(gamertag = gamertag, discordHandle = discord))
                 } else {
-                    db.userDao().insertUser(
-                        User(gamertag = gamertag, discordHandle = discord,
-                            profileImageUri = imageUri)
-                    )
+                    db.userDao().insertUser(User(gamertag = gamertag, discordHandle = discord))
                 }
             }
             auth.currentUser?.uid?.let { uid ->
@@ -212,7 +316,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ─── Meta stats ───────────────────────────────────────────────────────────
     fun fetchStats() = viewModelScope.launch {
         isLoading = true
         statsError = ""
@@ -269,7 +372,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ─── Personal stats (live API) ────────────────────────────────────────────
     fun fetchPlayerStats(query: String) = viewModelScope.launch {
         if (query.isBlank()) { playerStatsError = "Enter your UID or in-game name"; return@launch }
         isLoadingPlayer = true

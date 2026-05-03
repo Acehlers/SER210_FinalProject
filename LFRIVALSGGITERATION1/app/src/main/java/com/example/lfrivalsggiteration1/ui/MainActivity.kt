@@ -32,9 +32,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            LFRIVALSGGITERATION1Theme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    var isLoggedIn by remember { mutableStateOf(viewModel.isRememberMeEnabled()) }
+            val preferences by viewModel.userPreferences.collectAsState()
+            LFRIVALSGGITERATION1Theme(darkTheme = preferences.darkMode) {
+                Surface(modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background) {
+                    var isLoggedIn by remember {
+                        mutableStateOf(viewModel.isRememberMeEnabled())
+                    }
                     if (!isLoggedIn) {
                         AuthManager(vm = viewModel, onAuthComplete = { isLoggedIn = true })
                     } else {
@@ -58,14 +62,14 @@ fun MainScaffold(vm: MainViewModel, onLogout: () -> Unit) {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 tabs.forEach { screen ->
                     NavigationBarItem(
-                        selected = selectedTab == screen,
-                        onClick = { selectedTab = screen },
-                        icon = { Icon(screen.icon, contentDescription = screen.label) },
-                        label = { Text(screen.label) },
-                        colors = NavigationBarItemDefaults.colors(
+                        selected  = selectedTab == screen,
+                        onClick   = { selectedTab = screen },
+                        icon      = { Icon(screen.icon, contentDescription = screen.label) },
+                        label     = { Text(screen.label) },
+                        colors    = NavigationBarItemDefaults.colors(
                             selectedIconColor = RivalsRed,
                             selectedTextColor = RivalsRed,
-                            indicatorColor = Color(0xFFF5F5F5)
+                            indicatorColor    = Color(0xFFF5F5F5)
                         )
                     )
                 }

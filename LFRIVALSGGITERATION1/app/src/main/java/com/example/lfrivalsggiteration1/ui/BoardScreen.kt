@@ -143,6 +143,7 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             isAccepted          = post.postID in acceptedIds,
                             discordHandle       = if (post.postID in acceptedIds) post.username else null,
                             wasAcceptedByOthers = wasAcceptedByOthers,
+                            isOwnPost           = post.uid == currentUid,
                             onAccept            = { vm.acceptPost(post.postID) }
                         )
                     }
@@ -169,6 +170,7 @@ fun PostCard(
     isAccepted: Boolean,
     discordHandle: String?,
     wasAcceptedByOthers: Boolean,
+    isOwnPost: Boolean = false,
     onAccept: () -> Unit
 ) {
     Card(
@@ -204,6 +206,18 @@ fun PostCard(
                     Text(creatorName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold)
+                    if (isOwnPost) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiary,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("YOU",
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                fontSize = 9.sp,
+                                color = MaterialTheme.colorScheme.onTertiary,
+                                fontWeight = FontWeight.Black)
+                        }
+                    }
                     if (wasAcceptedByOthers) {
                         Surface(
                             color = Color(0xFF4CAF50),
@@ -245,14 +259,20 @@ fun PostCard(
 
             IconButton(
                 onClick = onAccept,
-                enabled = !isAccepted,
+                enabled = !isAccepted && !isOwnPost,
                 colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = if (isAccepted) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurface
+                    contentColor = when {
+                        isAccepted  -> MaterialTheme.colorScheme.onPrimary
+                        isOwnPost   -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        else        -> MaterialTheme.colorScheme.onSurface
+                    }
                 )
             ) {
-                if (isAccepted) Icon(Icons.Default.CheckCircle, "Accepted")
-                else Icon(Icons.Default.Add, "Accept")
+                when {
+                    isAccepted -> Icon(Icons.Default.CheckCircle, "Accepted")
+                    isOwnPost  -> Icon(Icons.Default.AccountCircle, "Your Post")
+                    else       -> Icon(Icons.Default.Add, "Accept")
+                }
             }
         }
     }

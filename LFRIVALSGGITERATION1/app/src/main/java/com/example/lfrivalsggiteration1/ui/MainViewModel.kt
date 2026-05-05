@@ -170,7 +170,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (doc != null) {
                     _userPreferences.value = UserPreferences(
                         darkMode             = doc.getBoolean("darkMode") ?: false,
-                        notificationsEnabled = doc.getBoolean("notificationsEnabled") ?: true
+                        notificationsEnabled = doc.getBoolean("notificationsEnabled") ?: true,
+                        textSize             = (doc.getDouble("textSize") ?: 14.0).toFloat()
                     )
                 }
             }
@@ -224,6 +225,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .putBoolean("remember_me", remember)
             .putString("saved_username", username)
             .apply()
+    }
+
+    fun updateTextSize(size: Float) {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("users").document(uid).update("textSize", size)
+        _userPreferences.value = _userPreferences.value.copy(textSize = size)
     }
 
     fun login(username: String, password: String, onResult: (Boolean) -> Unit) {

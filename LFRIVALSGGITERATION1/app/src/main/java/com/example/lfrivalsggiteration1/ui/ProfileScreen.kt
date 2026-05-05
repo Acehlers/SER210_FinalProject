@@ -24,6 +24,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import coil.compose.AsyncImage
 import com.example.lfrivalsggiteration1.ui.theme.RivalsRed
 
@@ -101,6 +103,52 @@ fun ProfileScreen(vm: MainViewModel, onLogout: () -> Unit, modifier: Modifier = 
                             checkedThumbColor = RivalsRed,
                             checkedTrackColor = RivalsRed.copy(alpha = 0.5f)
                         )
+                    )
+                }
+
+                HorizontalDivider()
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Text Size", fontSize = 16.sp)
+                        Text(
+                            when {
+                                preferences.textSize <= 12f -> "Small"
+                                preferences.textSize <= 14f -> "Medium"
+                                preferences.textSize <= 17f -> "Large"
+                                else                        -> "Extra Large"
+                            },
+                            fontSize = 14.sp,
+                            color = RivalsRed,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Slider(
+                        value = preferences.textSize,
+                        onValueChange = { vm.updateTextSize(it) },
+                        valueRange = 11f..20f,
+                        steps = 3,
+                        colors = SliderDefaults.colors(
+                            thumbColor       = RivalsRed,
+                            activeTrackColor = RivalsRed
+                        )
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("A", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("A", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Preview: Welcome to LFRivals!",
+                        fontSize = TextUnit(preferences.textSize, TextUnitType.Sp),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

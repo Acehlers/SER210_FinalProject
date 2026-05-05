@@ -16,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.example.lfrivalsggiteration1.ui.theme.LFRIVALSGGITERATION1Theme
 import com.example.lfrivalsggiteration1.ui.theme.RivalsRed
 
@@ -33,19 +35,28 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val preferences by viewModel.userPreferences.collectAsState()
-            LFRIVALSGGITERATION1Theme(darkTheme = preferences.darkMode) {
-                Surface(modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background) {
-                    var isLoggedIn by remember {
-                        mutableStateOf(viewModel.isRememberMeEnabled())
-                    }
-                    if (!isLoggedIn) {
-                        AuthManager(vm = viewModel, onAuthComplete = { isLoggedIn = true })
-                    } else {
-                        MainScaffold(vm = viewModel, onLogout = { isLoggedIn = false })
+            val density = LocalDensity.current
+            val fontScale = preferences.textSize / 14f
+            CompositionLocalProvider(
+                LocalDensity provides Density(
+                    density  = density.density,
+                    fontScale = fontScale
+                )
+            ) {
+                LFRIVALSGGITERATION1Theme(darkTheme = preferences.darkMode) {
+                    Surface(modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background) {
+                        var isLoggedIn by remember {
+                            mutableStateOf(viewModel.isRememberMeEnabled())
+                        }
+                        if (!isLoggedIn) {
+                            AuthManager(vm = viewModel, onAuthComplete = { isLoggedIn = true })
+                        } else {
+                            MainScaffold(vm = viewModel, onLogout = { isLoggedIn = false })
+                        }
                     }
                 }
-            }
+            } // end CompositionLocalProvider
         }
     }
 }

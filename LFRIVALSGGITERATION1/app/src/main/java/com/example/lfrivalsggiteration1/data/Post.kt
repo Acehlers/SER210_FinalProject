@@ -5,6 +5,7 @@ data class Post(
     val uid: String = "",
     val userID: Int = 0,
     val username: String = "",
+    val discordHandle: String = "",
     val hero: String = "",
     val role: String = "",
     val rank: String = "",

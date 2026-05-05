@@ -141,7 +141,7 @@ fun BoardScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             post                = post,
                             creatorName         = post.username.ifBlank { "Rival" },
                             isAccepted          = post.postID in acceptedIds,
-                            discordHandle       = if (post.postID in acceptedIds) post.username else null,
+                            discordHandle       = if (post.postID in acceptedIds) post.discordHandle else null,
                             wasAcceptedByOthers = wasAcceptedByOthers,
                             isOwnPost           = post.uid == currentUid,
                             onAccept            = { vm.acceptPost(post.postID) }
